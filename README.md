@@ -62,7 +62,3 @@ Customer-Support-Analytics/
 ├── powerbi/         dashboard (coming soon)
 └── README.md
 ```
-
-## Limitations
-- Python EDA and charts were skipped; analysis was done in SQL and will be visualized in Power BI.
-- CSV timestamps are minute-level. The rounding root cause of 3 SLA mismatches was verified in Excel with second-level data.
