@@ -45,8 +45,6 @@ Note: SLA_Status follows the standard priority targets (Critical 4, High 8, Medi
 6. Team, agent experience, customer segment, channel and region show no meaningful difference in breach rate (all within about 3 percentage points).
 7. Volume and performance are stable from Jan to Sep 2026: about 1,000-1,180 tickets per month, breach 59-65%, CSAT 3.35-3.45. The problem is persistent, not new.
 
-These are associations from the data, not proof of cause.
-
 ## Recommendations (preliminary)
 - Review the Critical and High SLA targets (4 and 8 hours), or add capacity for those tickets.
 - Give Feature Request tickets a separate workflow or SLA target.
@@ -68,4 +66,3 @@ Customer-Support-Analytics/
 ## Limitations
 - Python EDA and charts were skipped; analysis was done in SQL and will be visualized in Power BI.
 - CSV timestamps are minute-level. The rounding root cause of 3 SLA mismatches was verified in Excel with second-level data.
-- Findings show association, not causation.
