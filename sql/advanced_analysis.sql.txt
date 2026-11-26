@@ -1,0 +1,58 @@
+-- ============================================================
+-- Customer Support Analytics: Advanced SQL (Window Functions, CTEs)
+-- ============================================================
+USE support_analytics;
+
+-- ------------------------------------------------------------
+-- A1: Month-over-month ticket volume (CTE + LAG)
+-- Result: volume stable at ~1,000-1,180 tickets/month, no growth trend
+-- ------------------------------------------------------------
+WITH monthly AS (
+    SELECT
+        DATE_FORMAT(Created_Date, '%Y-%m') AS month,
+        COUNT(*) AS tickets
+    FROM tickets
+    GROUP BY DATE_FORMAT(Created_Date, '%Y-%m')
+)
+SELECT
+    month,
+    tickets,
+    LAG(tickets) OVER (ORDER BY month) AS prev_month,
+    ROUND(100 * (tickets - LAG(tickets) OVER (ORDER BY month))
+          / LAG(tickets) OVER (ORDER BY month), 1) AS mom_change_pct
+FROM monthly
+ORDER BY month;
+
+-- ------------------------------------------------------------
+-- A2: Monthly SLA breach % and CSAT (resolved tickets, by created month)
+-- Result: breach 59.0%-64.8%, CSAT 3.35-3.45, no clear trend
+-- ------------------------------------------------------------
+SELECT
+    DATE_FORMAT(Created_Date, '%Y-%m') AS month,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(Customer_Satisfaction), 2) AS avg_csat
+FROM tickets
+WHERE Status = 'Resolved'
+GROUP BY DATE_FORMAT(Created_Date, '%Y-%m')
+ORDER BY month;
+
+-- ------------------------------------------------------------
+-- A3: Agent ranking within team (CTE + RANK)
+-- Note: each agent has ~130-180 tickets with a different priority/issue mix,
+-- so differences are not a reliable performance signal.
+-- RANK() gives ties the same rank and skips the next (3, 3, 5).
+-- ------------------------------------------------------------
+WITH agent_perf AS (
+    SELECT a.Agent_ID, a.Team,
+           COUNT(*) AS resolved_tickets,
+           ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct
+    FROM tickets t
+    JOIN agents a ON t.Agent_ID = a.Agent_ID
+    WHERE t.Status = 'Resolved'
+    GROUP BY a.Agent_ID, a.Team
+)
+SELECT *,
+       RANK() OVER (PARTITION BY Team ORDER BY breach_pct DESC) AS rank_in_team
+FROM agent_perf
+ORDER BY Team, rank_in_team;

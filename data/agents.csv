@@ -1,0 +1,56 @@
+﻿Agent_ID,Agent_Name,Team,Experience_Level,Region
+A101,Agent_101,Account Support,Junior,Europe
+A102,Agent_102,Billing Support,Junior,Asia Pacific
+A103,Agent_103,Technical Support,Mid,Asia Pacific
+A104,Agent_104,Integration Support,Mid,Asia Pacific
+A105,Agent_105,Technical Support,Senior,Europe
+A106,Agent_106,Technical Support,Junior,Asia Pacific
+A107,Agent_107,Billing Support,Junior,Middle East
+A108,Agent_108,Technical Support,Junior,Asia Pacific
+A109,Agent_109,Billing Support,Senior,Europe
+A110,Agent_110,Technical Support,Senior,Asia Pacific
+A111,Agent_111,Technical Support,Senior,Asia Pacific
+A112,Agent_112,Technical Support,Senior,Asia Pacific
+A113,Agent_113,Technical Support,Mid,North America
+A114,Agent_114,Billing Support,Mid,North America
+A115,Agent_115,Account Support,Mid,Asia Pacific
+A116,Agent_116,Integration Support,Mid,North America
+A117,Agent_117,Integration Support,Mid,Asia Pacific
+A118,Agent_118,Technical Support,Mid,Europe
+A119,Agent_119,Billing Support,Senior,Asia Pacific
+A120,Agent_120,Technical Support,Senior,North America
+A121,Agent_121,Technical Support,Senior,North America
+A122,Agent_122,Billing Support,Senior,Middle East
+A123,Agent_123,Technical Support,Mid,Middle East
+A124,Agent_124,Technical Support,Junior,Asia Pacific
+A125,Agent_125,Integration Support,Junior,Europe
+A126,Agent_126,Billing Support,Mid,Asia Pacific
+A127,Agent_127,Billing Support,Mid,Asia Pacific
+A128,Agent_128,Technical Support,Junior,Asia Pacific
+A129,Agent_129,Technical Support,Senior,North America
+A130,Agent_130,Integration Support,Junior,Asia Pacific
+A131,Agent_131,Technical Support,Junior,Asia Pacific
+A132,Agent_132,Technical Support,Mid,Middle East
+A133,Agent_133,Technical Support,Junior,North America
+A134,Agent_134,Billing Support,Junior,Asia Pacific
+A135,Agent_135,Technical Support,Mid,Asia Pacific
+A136,Agent_136,Integration Support,Senior,Europe
+A137,Agent_137,Integration Support,Mid,North America
+A138,Agent_138,Account Support,Mid,Europe
+A139,Agent_139,Technical Support,Mid,Europe
+A140,Agent_140,Integration Support,Junior,Europe
+A141,Agent_141,Billing Support,Senior,Asia Pacific
+A142,Agent_142,Technical Support,Junior,Asia Pacific
+A143,Agent_143,Account Support,Senior,Asia Pacific
+A144,Agent_144,Technical Support,Mid,Middle East
+A145,Agent_145,Technical Support,Senior,Europe
+A146,Agent_146,Account Support,Junior,North America
+A147,Agent_147,Technical Support,Mid,Asia Pacific
+A148,Agent_148,Billing Support,Junior,North America
+A149,Agent_149,Technical Support,Junior,Europe
+A150,Agent_150,Integration Support,Mid,North America
+A151,Agent_151,Integration Support,Junior,North America
+A152,Agent_152,Integration Support,Mid,Asia Pacific
+A153,Agent_153,Technical Support,Junior,North America
+A154,Agent_154,Technical Support,Mid,Europe
+A155,Agent_155,Billing Support,Senior,North America

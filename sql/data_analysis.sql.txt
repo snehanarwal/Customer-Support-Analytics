@@ -1,0 +1,348 @@
+-- ============================================================
+-- Customer Support Analytics: SQL Analysis (MySQL)
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- SECTION 1: DATABASE AND TABLE SETUP
+-- ------------------------------------------------------------
+CREATE DATABASE support_analytics;
+USE support_analytics;
+
+CREATE TABLE customers (
+    Customer_ID       VARCHAR(10) PRIMARY KEY,
+    Customer_Name     VARCHAR(50),
+    Industry          VARCHAR(50),
+    Region            VARCHAR(50),
+    Customer_Segment  VARCHAR(50),
+    Customer_Since    DATE
+);
+
+CREATE TABLE agents (
+    Agent_ID          VARCHAR(10) PRIMARY KEY,
+    Agent_Name        VARCHAR(50),
+    Team              VARCHAR(50),
+    Experience_Level  VARCHAR(30),
+    Region            VARCHAR(50)
+);
+
+CREATE TABLE products (
+    Product_ID        VARCHAR(10) PRIMARY KEY,
+    Product_Name      VARCHAR(50),
+    Product_Category  VARCHAR(50),
+    Launch_Year       INT
+);
+
+CREATE TABLE sla_rules (
+    Priority          VARCHAR(20) PRIMARY KEY,
+    SLA_Target_Hours  INT
+);
+
+CREATE TABLE tickets (
+    Ticket_ID              VARCHAR(15) PRIMARY KEY,
+    Customer_ID            VARCHAR(10),
+    Product_ID             VARCHAR(10),
+    Agent_ID               VARCHAR(10),
+    Created_Date           DATETIME,
+    Resolved_Date          DATETIME NULL,
+    Priority               VARCHAR(20),
+    Channel                VARCHAR(30),
+    Issue_Type             VARCHAR(50),
+    Status                 VARCHAR(20),
+    SLA_Target_Hours       INT,
+    Resolution_Time_Hours  DECIMAL(8,2) NULL,
+    SLA_Status             VARCHAR(20),
+    Customer_Satisfaction  TINYINT NULL,
+    CSAT_Missing_Flag      VARCHAR(5),
+    SLA_Mismatch_Flag      VARCHAR(5),
+    Channel_Missing_Flag   VARCHAR(5),
+    Elapsed_Hours          DECIMAL(10,4) NULL
+);
+
+-- ------------------------------------------------------------
+-- SECTION 2: LOAD TICKETS VIA STAGING TABLE
+-- Dates in the CSV are day-month-year text (e.g. 14-05-2026 12:57),
+-- so all columns are loaded as text first, then converted.
+-- ------------------------------------------------------------
+CREATE TABLE tickets_stg (
+    Ticket_ID VARCHAR(15),
+    Customer_ID VARCHAR(10),
+    Product_ID VARCHAR(10),
+    Agent_ID VARCHAR(10),
+    Created_Date VARCHAR(30),
+    Resolved_Date VARCHAR(30),
+    Priority VARCHAR(20),
+    Channel VARCHAR(30),
+    Issue_Type VARCHAR(50),
+    Status VARCHAR(20),
+    SLA_Target_Hours VARCHAR(10),
+    Resolution_Time_Hours VARCHAR(20),
+    SLA_Status VARCHAR(20),
+    Customer_Satisfaction VARCHAR(10),
+    CSAT_Missing_Flag VARCHAR(5),
+    SLA_Mismatch_Flag VARCHAR(5),
+    Elapsed_Hours VARCHAR(20),
+    Channel_Missing_Flag VARCHAR(5)
+);
+
+-- (CSV imported into tickets_stg using MySQL Workbench Table Data Import Wizard)
+
+INSERT INTO tickets
+SELECT
+    Ticket_ID, Customer_ID, Product_ID, Agent_ID,
+    STR_TO_DATE(Created_Date, '%d-%m-%Y %H:%i'),
+    STR_TO_DATE(NULLIF(Resolved_Date,''), '%d-%m-%Y %H:%i'),
+    Priority, Channel, Issue_Type, Status,
+    CAST(SLA_Target_Hours AS UNSIGNED),
+    CAST(NULLIF(Resolution_Time_Hours,'') AS DECIMAL(8,2)),
+    SLA_Status,
+    CAST(NULLIF(Customer_Satisfaction,'') AS UNSIGNED),
+    CSAT_Missing_Flag, SLA_Mismatch_Flag, Channel_Missing_Flag,
+    CAST(NULLIF(Elapsed_Hours,'') AS DECIMAL(10,4))
+FROM tickets_stg;
+
+-- ------------------------------------------------------------
+-- SECTION 3: LOAD VERIFICATION
+-- Expected: tickets = 10000, NULL Resolved_Date = 1573, NULL Created_Date = 0
+-- ------------------------------------------------------------
+SELECT COUNT(*) FROM tickets;
+SELECT COUNT(*) FROM tickets WHERE Resolved_Date IS NULL;
+SELECT COUNT(*) FROM tickets WHERE Created_Date IS NULL;
+SELECT MIN(Created_Date), MAX(Created_Date) FROM tickets;
+
+-- ------------------------------------------------------------
+-- SECTION 4: BUSINESS ANALYSIS
+-- Note: SLA breach % is calculated on RESOLVED tickets only.
+-- SLA_Status follows the standard priority targets
+-- (Critical 4, High 8, Medium 24, Low 48 hours).
+-- ------------------------------------------------------------
+
+-- Q1: What is the overall SLA breach %?
+-- Result: 8,427 resolved, 5,193 breached, 61.6%
+SELECT
+    COUNT(*) AS resolved_tickets,
+    SUM(SLA_Status = 'Breached') AS breached,
+    ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct
+FROM tickets
+WHERE Status = 'Resolved';
+
+-- Q2: Breach % and resolution time by priority
+-- Result: Critical 96.3, High 93.1, Medium 53.3, Low 32.8
+SELECT
+    Priority,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(Resolution_Time_Hours), 1) AS avg_resolution_hrs
+FROM tickets
+WHERE Status = 'Resolved'
+GROUP BY Priority
+ORDER BY breach_pct DESC;
+
+-- Q3: Breach % by product
+-- Result: DataSync highest at 69.9%
+SELECT
+    p.Product_Name,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct
+FROM tickets t
+JOIN products p ON t.Product_ID = p.Product_ID
+WHERE t.Status = 'Resolved'
+GROUP BY p.Product_Name
+ORDER BY breach_pct DESC;
+
+-- Q4: Is DataSync's breach explained by priority mix?
+-- Result: No. Critical/High share is ~28.6-31.9% for all products
+SELECT
+    p.Product_Name,
+    ROUND(100 * SUM(t.Priority IN ('Critical','High')) / COUNT(*), 1) AS pct_critical_high
+FROM tickets t
+JOIN products p ON t.Product_ID = p.Product_ID
+WHERE t.Status = 'Resolved'
+GROUP BY p.Product_Name
+ORDER BY pct_critical_high DESC;
+
+-- Q5: Breach % by issue type (all products)
+-- Result: Feature Request 83.5% highest; DataSync-only technical issues ~71-72%
+SELECT
+    Issue_Type,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(Resolution_Time_Hours), 1) AS avg_hrs
+FROM tickets
+WHERE Status = 'Resolved'
+GROUP BY Issue_Type
+ORDER BY breach_pct DESC;
+
+-- Q6: How many products does each issue type appear in?
+-- Result: 15 of 19 issue types appear in only one product
+SELECT Issue_Type, COUNT(DISTINCT Product_ID) AS num_products
+FROM tickets
+GROUP BY Issue_Type
+ORDER BY num_products, Issue_Type;
+
+-- Q7: Breach % by team
+-- Result: 60.9% to 63.4%, no team stands out
+SELECT
+    a.Team,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(t.Resolution_Time_Hours), 1) AS avg_hrs
+FROM tickets t
+JOIN agents a ON t.Agent_ID = a.Agent_ID
+WHERE t.Status = 'Resolved'
+GROUP BY a.Team
+ORDER BY breach_pct DESC;
+
+-- Q8: Breach % by agent experience level
+-- Result: 60.7% to 62.6%, experience makes no real difference
+SELECT
+    a.Experience_Level,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(t.Resolution_Time_Hours), 1) AS avg_hrs
+FROM tickets t
+JOIN agents a ON t.Agent_ID = a.Agent_ID
+WHERE t.Status = 'Resolved'
+GROUP BY a.Experience_Level
+ORDER BY breach_pct DESC;
+
+-- Q9: Breach % and CSAT by customer segment
+-- Result: no meaningful difference (60.3% to 62.8%)
+SELECT
+    c.Customer_Segment,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(t.Customer_Satisfaction), 2) AS avg_csat
+FROM tickets t
+JOIN customers c ON t.Customer_ID = c.Customer_ID
+WHERE t.Status = 'Resolved'
+GROUP BY c.Customer_Segment
+ORDER BY breach_pct DESC;
+
+-- Q10: Breach % and CSAT by channel
+-- Result: no meaningful difference (60.6% to 62.4%)
+SELECT Channel,
+       COUNT(*) AS resolved_tickets,
+       ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+       ROUND(AVG(Customer_Satisfaction), 2) AS avg_csat
+FROM tickets
+WHERE Status = 'Resolved'
+GROUP BY Channel
+ORDER BY breach_pct DESC;
+
+-- Q11: Breach % and CSAT by customer region
+-- Result: no meaningful difference (60.7% to 63.7%)
+SELECT c.Region,
+       COUNT(*) AS resolved_tickets,
+       ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+       ROUND(AVG(t.Customer_Satisfaction), 2) AS avg_csat
+FROM tickets t
+JOIN customers c ON t.Customer_ID = c.Customer_ID
+WHERE t.Status = 'Resolved'
+GROUP BY c.Region
+ORDER BY breach_pct DESC;
+
+-- ------------------------------------------------------------
+-- SECTION 5: CUSTOMER SATISFACTION (CSAT)
+-- Only tickets with a score are included (83 resolved tickets have no score).
+-- ------------------------------------------------------------
+
+-- Q12: CSAT by SLA status
+-- Result: Met 4.16 vs Breached 2.95 (8,344 scored tickets)
+SELECT
+    SLA_Status,
+    COUNT(*) AS tickets,
+    ROUND(AVG(Customer_Satisfaction), 2) AS avg_csat
+FROM tickets
+WHERE Status = 'Resolved'
+  AND Customer_Satisfaction IS NOT NULL
+GROUP BY SLA_Status;
+
+-- Q13: Does the CSAT gap hold within each priority?
+-- Result: Yes. Met ~4.1-4.2 in every priority; Breached 2.42 (Critical) to 3.22 (Low)
+SELECT
+    Priority,
+    SLA_Status,
+    COUNT(*) AS tickets,
+    ROUND(AVG(Customer_Satisfaction), 2) AS avg_csat
+FROM tickets
+WHERE Status = 'Resolved'
+  AND Customer_Satisfaction IS NOT NULL
+GROUP BY Priority, SLA_Status
+ORDER BY FIELD(Priority, 'Critical', 'High', 'Medium', 'Low'), SLA_Status;
+
+-- Q14: CSAT and breach % by issue type
+-- Result: Feature Request has the lowest CSAT (3.04) and highest breach
+SELECT
+    Issue_Type,
+    COUNT(*) AS tickets,
+    ROUND(AVG(Customer_Satisfaction), 2) AS avg_csat,
+    ROUND(100 * SUM(SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct
+FROM tickets
+WHERE Status = 'Resolved'
+  AND Customer_Satisfaction IS NOT NULL
+GROUP BY Issue_Type
+ORDER BY avg_csat;
+
+-- Q15: Customers with the highest ticket volume
+-- Result: top 10 raised 16-21 tickets, no sharp outlier
+SELECT Customer_ID, COUNT(*) AS tickets
+FROM tickets
+GROUP BY Customer_ID
+ORDER BY tickets DESC
+LIMIT 10;
+
+-- Q16: Average tickets per customer
+-- Result: 1,200 customers, 8.3 tickets each
+SELECT
+    COUNT(DISTINCT Customer_ID) AS customers_with_tickets,
+    ROUND(COUNT(*) / COUNT(DISTINCT Customer_ID), 1) AS avg_tickets_per_customer
+FROM tickets;
+
+-- ------------------------------------------------------------
+-- SECTION 6: SUPPORTING CHECKS
+-- ------------------------------------------------------------
+
+-- Q17: Row counts after import
+-- Result: customers 1200, agents 55, products 6, sla_rules 4, tickets 10000
+SELECT 'customers' AS tbl, COUNT(*) AS cnt FROM customers
+UNION ALL SELECT 'agents',    COUNT(*) FROM agents
+UNION ALL SELECT 'products',  COUNT(*) FROM products
+UNION ALL SELECT 'sla_rules', COUNT(*) FROM sla_rules
+UNION ALL SELECT 'tickets',   COUNT(*) FROM tickets;
+
+-- Q18: Data-quality flags created during Excel/Python cleaning
+-- Achieved (from Excel/Python): CSAT missing 83, SLA mismatch 9, Channel missing 35
+SELECT
+    SUM(CSAT_Missing_Flag = 'Yes')    AS csat_missing,
+    SUM(SLA_Mismatch_Flag = 'Yes')    AS sla_mismatch,
+    SUM(Channel_Missing_Flag = 'Yes') AS channel_missing
+FROM tickets;
+
+-- Q19: Breach % by issue type inside DataSync
+-- Result: Integration 72.4, Data Sync 71.5, API Error 71.2, Configuration 58.9
+SELECT
+    t.Issue_Type,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct,
+    ROUND(AVG(t.Resolution_Time_Hours), 1) AS avg_hrs
+FROM tickets t
+JOIN products p ON t.Product_ID = p.Product_ID
+WHERE t.Status = 'Resolved'
+  AND p.Product_Name = 'DataSync'
+GROUP BY t.Issue_Type
+ORDER BY breach_pct DESC;
+
+-- Q20: Feature Request breach % by product and priority
+-- Result: appears in CloudCRM, WorkHub, InsightPro only; breach is high in every
+-- priority (Medium 77-85%, Low 54-71%), so priority mix does not explain it
+SELECT
+    p.Product_Name,
+    t.Priority,
+    COUNT(*) AS resolved_tickets,
+    ROUND(100 * SUM(t.SLA_Status = 'Breached') / COUNT(*), 1) AS breach_pct
+FROM tickets t
+JOIN products p ON t.Product_ID = p.Product_ID
+WHERE t.Status = 'Resolved'
+  AND t.Issue_Type = 'Feature Request'
+GROUP BY p.Product_Name, t.Priority
+ORDER BY resolved_tickets DESC;
